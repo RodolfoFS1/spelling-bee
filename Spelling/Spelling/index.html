@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spelling Bee Contest</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&amp;family=Lilita+One&amp;display=swap" rel="stylesheet">
+  <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: auto; }
+        body { font-family: 'Patrick Hand', cursive; }
+
+        /* Pizarrón base */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: 
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px),
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .screen { display: none; min-height: 100%; padding: 40px 20px; text-align: center; position: relative; }
+        .screen.active { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+
+        /* Abejas flotantes con vuelo realista */
+        .floating-bee {
+            position: fixed;
+            font-size: 2.5rem;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0;
+        }
+        .bee-animate { animation: beeWing 0.3s ease-in-out infinite, beeFly 3s ease-in-out forwards; }
+        @keyframes beeWing {
+            0%, 100% { transform: rotateZ(0deg) scaleY(1); }
+            50% { transform: rotateZ(10deg) scaleY(0.95); }
+        }
+        @keyframes beeFly {
+            0% { opacity: 0; transform: translate(0, 0); }
+            5% { opacity: 1; }
+            15% { transform: translate(40px, -30px) rotate(15deg); }
+            30% { transform: translate(80px, -60px) rotate(25deg); }
+            50% { transform: translate(120px, -40px) rotate(35deg); }
+            70% { transform: translate(140px, -90px) rotate(45deg); }
+            85% { transform: translate(160px, -120px) rotate(50deg); }
+            95% { opacity: 1; }
+            100% { opacity: 0; transform: translate(200px, -150px) rotate(55deg); }
+        }
+
+        /* Efecto gis más marcado */
+        .chalk-text {
+            text-shadow: 
+                3px 3px 0px rgba(0,0,0,0.15),
+                -1px -1px 1px rgba(255,255,255,0.15),
+                -2px -2px 3px rgba(0,0,0,0.1);
+            letter-spacing: 1px;
+            font-weight: 500;
+        }
+
+        .grade-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.2);
+            font-weight: 600;
+            backdrop-filter: blur(4px);
+        }
+        .grade-card:hover { 
+            transform: translateY(-6px); 
+            box-shadow: 0 10px 18px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.3);
+        }
+        .grade-card:active { transform: translateY(-2px); }
+
+        /* Colores por dificultad - RELLENO COMPLETO */
+        .difficulty-easy { background: greenyellow; color: black; }
+        .difficulty-easy:hover { background: green; }
+        
+        .difficulty-medium { background: yellow; color: black; }
+        .difficulty-medium:hover { background: #eab308; }
+        
+        .difficulty-hard { background: orange; color: black; }
+        .difficulty-hard:hover { background: orangered; }
+        
+        .difficulty-difficult { background: red; color: black; }
+        .difficulty-difficult:hover { background: maroon; }
+        
+        .difficulty-challenge { background: purple; color: black; }
+        .difficulty-challenge:hover { background: darkmagenta; }
+
+        .chalk-btn {
+            background: rgba(134, 239, 172, 0.85);
+            border: none;
+            color: black;
+            font-weight: 600;
+            transition: all 0.3s;
+            border-radius: 20px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3);
+        }
+        .chalk-btn:hover { 
+            background: rgba(134, 239, 172, 1);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.4);
+        }
+        .chalk-btn:active { 
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3);
+        }
+
+        .word-reveal { animation: wordReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes wordReveal { 0%{ opacity:0; transform: scale(0.5) rotateX(40deg); } 100%{ opacity:1; transform: scale(1) rotateX(0); } }
+
+        .stagger-in { animation: staggerIn 0.5s ease-out both; }
+        @keyframes staggerIn { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+
+        .wheel-wrapper { position: relative; width: 380px; height: 380px; margin: 15px auto; }
+        #wheelCanvas { display: block; width: 100%; height: 100%; }
+        #pointer {
+            position: absolute; left: 50%; top: -8px; transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 16px solid transparent; border-right: 16px solid transparent;
+            border-top: 36px solid #fbbf24;
+            z-index: 10;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+        }
+
+        .back-btn-styled {
+            transition: all 0.2s;
+            color: #e0e7ff;
+            border-color: #e0e7ff;
+        }
+        .back-btn-styled:hover { background: rgba(255,255,255,0.15); transform: translateX(-2px); }
+
+        .logo-container {
+            position: absolute;
+            top: 60px;
+            width: 800px;
+            height: auto;
+        }
+        #school-logo {
+            width: 100%;
+            height: auto;
+            filter: brightness(0) invert(1) drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            opacity: 0.9;
+        }
+    </style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ <script src="/_sdk/telemetry_sdk.js"></script></head>
+ <body class="h-full bg-gradient-to-br from-green-900 via-green-800 to-green-900 text-white">
+  <!-- WELCOME SCREEN -->
+  <section id="welcome-screen" class="screen active">
+   <div class="logo-container"><img id="school-logo" src="img/IMG_1799.PNG" alt="school-logo">
+   </div>
+   <h1 id="mainTitle" class="font-['Patrick_Hand'] text-6xl md:text-7xl lg:text-8xl text-green-200 drop-shadow-lg mb-2 chalk-text">Spelling Bee Contest</h1>
+   <button id="startBtn" class="text-white text-2xl px-8 py-3 border-3 border-white rounded-xl hover:bg-white hover:text-green-900 transition-all duration-300"> START </button>
+  </section><!-- GRADE SCREEN -->
+  <section id="grade-screen" class="screen">
+   <button id="backToWelcome" class="back-btn-styled absolute top-5 left-5 flex items-center gap-2 px-4 py-2 rounded-xl border-3 text-sm"> <i data-lucide="home" style="width:18px;height:18px;"></i> HOME </button>
+   <h2 class="font-['Patrick_Hand'] text-5xl md:text-6xl text-green-200 mb-8 chalk-text">Select Grade</h2>
+   <div class="grid grid-cols-2 gap-5 w-full max-w-lg">
+    <button class="grade-btn grade-card difficulty-easy text-2xl font-semibold" data-grade="second">
+     <div class="text-4xl mb-2">
+      
+     </div>2nd Grade </button> <button class="grade-btn grade-card difficulty-medium text-2xl font-semibold" data-grade="fourth">
+     <div class="text-4xl mb-2">
+      
+     </div>4th Grade </button> <button class="grade-btn grade-card difficulty-hard text-2xl font-semibold" data-grade="fifth">
+     <div class="text-4xl mb-2">
+      
+     </div>5th Grade </button> <button class="grade-btn grade-card difficulty-difficult text-2xl font-semibold" data-grade="sixth">
+     <div class="text-4xl mb-2">
+      
+     </div>6th Grade </button>
+   </div>
+  </section><!-- CATEGORY SCREEN -->
+  <section id="category-screen" class="screen">
+   <button id="backToGrades" class="back-btn-styled absolute top-5 left-5 flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm"> <i data-lucide="arrow-left" style="width:18px;height:18px;"></i> BACK </button>
+   <h2 id="gradeTitle" class="font-['Patrick_Hand'] text-5xl md:text-6xl text-green-200 mb-8 chalk-text"></h2>
+   <div id="categoriesContainer" class="grid grid-cols-2 gap-5 w-full max-w-lg"></div>
+  </section><!-- WHEEL SCREEN -->
+  <section id="wheel-screen" class="screen">
+   <button id="backToCategories" class="back-btn-styled absolute top-5 left-5 flex items-center gap-2 px-4 py-2 rounded-xl border-1 text-sm"> <i data-lucide="arrow-left" style="width:18px;height:18px;"></i> BACK </button>
+   <h2 id="currentCategory" class="font-['Patrick_Hand'] text-4xl text-green-200 mb-2 chalk-text"></h2>
+   <div id="remainingWords" class="text-lg text-green-100/70 mb-3 chalk-text">
+    Remaining: 0
+   </div>
+   <div class="wheel-wrapper">
+    <div id="pointer"></div>
+    <canvas id="wheelCanvas" width="400" height="400"></canvas>
+   </div><button id="spinBtn" class="chalk-btn text-black-400 text-xl px-10 py-3 rounded-2xl mt-4">SPIN </button>
+  </section><!-- RESULT SCREEN -->
+  <section id="result-screen" class="screen">
+   <div class="text-5xl mb-4">
+    
+   </div>
+   <h2 class="font-['Patrick_Hand'] text-4xl text-green-200 mb-4 chalk-text">YOUR WORD IS:</h2>
+   <div id="winnerWord" class="word-reveal font-['Patrick_Hand'] text-6xl md:text-7xl text-green-100 drop-shadow-lg mb-8 max-w-full break-words px-4 chalk-text">
+    WORD
+   </div><button id="nextWordBtn" class="chalk-btn text-black-400 text-xl px-10 py-3 rounded-2xl"> NEXT WORD </button>
+  </section>
+  <script>
+    // ===== ABEJAS FLOTANTES - Solo en pantallas específicas =====
+    function createFloatingBee() {
+        const activeScreen = document.querySelector('.screen.active');
+        const allowedScreens = ['welcome-screen', 'grade-screen', 'category-screen'];
+        
+        if (!activeScreen || !allowedScreens.includes(activeScreen.id)) return;
+        
+        const bee = document.createElement('div');
+        bee.className = 'floating-bee bee-animate';
+        bee.textContent = '🐝';
+        bee.style.left = Math.random() * window.innerWidth + 'px';
+        bee.style.top = Math.random() * window.innerHeight + 'px';
+        const delay = Math.random() * 0.5;
+        bee.style.animationDelay = delay + 's';
+        document.body.appendChild(bee);
+        setTimeout(() => bee.remove(), 3500 + delay * 1000);
+    }
+
+    setInterval(createFloatingBee, 800);
+
+    // ===== DATA =====
+    const spellingData = {
+        second: {
+            easy: ["date","nail","big","seal","red","run","feet","yarn","boot","moon","fish","dog","cat","it","she","he","yes","cow","out","bee","page","fate","feet"],
+            medium: ["small","yellow","circle","banana","book","fast","father","boat","food","spoon","five","plants","river","soap","mirror","nail","year","mail","robe","seal","yarn","sheep"],
+            hard: ["orange","apple","swim","walk","boxes","men","play","cloth","sound","crown","time","roots","father","mother","brother","thank","team","train","cherry","arrow","boat","yellow"],
+            challenge: ["exclamatory","children","mouse","cowboy","jacket","game","word","cook","flowers","happy","december"]
+        },
+        fourth: {
+            easy: ["oar","hang","pour","rugs","rush","flow","knit","vast","break","fresh","snack","tasty","herbs","flour","beets","flaps","gazed","glide","broth","thaws","tough","famous","flavor","garlic","indoor","notice","powder","stress"],
+            medium: ["celery","lagoon","marshy","factory","quickly","trading","willing","cabbage","cottage","heaters","pickles","pillows","statues","warm up","admired","butcher","gliding","logging","masters","seagull","soaring","species","triumph","voyager","curtains","daughter","decision","flooding"],
+            difficult: ["freezing","reminder","supposed","training","weddings","attitude","contains","declined","landmark","stubborn","twilight","mammoths","gardening","happiness","meatballs","slow down","appetizer","exclaimed","fountains","hopefully","pass down","permanent","predicted","succeeded","thrilling","twinkling","altitudes","breathing"],
+            hard: ["conquered","launching","parachute","withstand","aerospace","cosmonaut","excitement","impossible","frightened","remarkable","throughout","breathless","atmosphere","innovative","weightless","permafrost","ingredients","opportunity","extravagant","appreciation","architecture","fingerprints","intelligence","paintbrushes","enthusiastic","perseverance","determination","extraordinary"],
+            challenge: ["comfortable","gracefully","memorized","fought","fascinated","handsome","circling","designed","healthy","sensitive"]
+        },
+        fifth: {
+            easy: ["swamp","harder","unlike","fields","bright","cotton","tribes","sailed","prowl","prey","seed","law","beats","driven","eaten","went","gone","creepy","peaks","venom","gorge","mix","rarest"],
+            medium: ["dragged","illness","carved","grizzly","flicks","healthy","develop","rhythms","melodies","emotional","clarinets","farmers","sadness","forever","leagues","attention","inspire","exciting","notably","overhand","uniquely","highlight","climbers"],
+            hard: ["everglades","alligators","mangroves","waterfalls","sequoias","scattered","settlers","hardiest","pioneers","fearsome","diabetes","poisonous","basements","kilograms","northwestern","prepositions","experiments","entertainment","universally","similarities","southwest","overhand","uniquely"],
+            challenge: ["endurance","recognition","throughout","communication","lifeboats","extremely","undisputed","shackleton","lightweight","simultaneously"]
+        },
+        sixth: {
+            easy: ["talent","clear","dribble","senior","contract","trophies","private","charity","scores","award","titles","orcas","birth","death","echoes","chisel","split","village","canoe","fossils","humid","adapt"],
+            medium: ["defenders","foundation","greatness","academy","smartest","spectacle","ethereal","severe","loudly","packed","varied","elegant","feared","roll into","generate","flamingos","majestic","ghostly","engaged","decided","tumbled"],
+            hard: ["achievements","tournament","inspiration","grasslands","armadillos","adaptations","harmonious","awe-inspiring","paleontologist","specialty","sacrifice","horseshoe","carnivores","herbivores","omnivores","meteorite","frustration","patience","preserved","instrument","hypnotizing","syndrome"],
+            challenge: ["knucklebones","outstanding","checkers","egyptians","well-preserved","suggestions","underlined","understand","unscramble","unforgettable","neighborhood","uncomfortable","wavelength","poisonous"]
+        }
+    };
+
+    // ===== WHEEL =====
+    const canvas = document.getElementById("wheelCanvas");
+    const ctx = canvas.getContext("2d");
+    let wheelWords = [];
+    let currentRotation = 0;
+    let spinning = false;
+
+    const wheelColors = ["#065f46","#047857","#059669","#10b981","#34d399","#6ee7b7"];
+
+    function loadWheel(words) { wheelWords = [...words]; drawWheel(); }
+
+    function drawWheel(rotation = currentRotation) {
+        const centerX = canvas.width / 2, centerY = canvas.height / 2, radius = 185;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (wheelWords.length === 0) return;
+        const angleSize = (Math.PI * 2) / wheelWords.length;
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(rotation);
+        wheelWords.forEach((word, i) => {
+            const start = i * angleSize, end = start + angleSize;
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, radius, start, end); ctx.closePath();
+            ctx.fillStyle = "transparent";ctx.fill();
+            ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.stroke();
+            ctx.save();
+            ctx.rotate(start + angleSize / 2);
+            ctx.textAlign = "right"; ctx.fillStyle = "white";
+            const fontSize = Math.max(9, 14 - wheelWords.length / 4);
+            ctx.font = `bold ${fontSize}px Patrick Hand`; ctx.fillText(word.toUpperCase(), radius - 12, 4);
+            ctx.restore();
+        });
+        // outer ring
+        ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.lineWidth = 6; ctx.strokeStyle = "#86efac"; ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.fillStyle = "#86efac"; ctx.fill();
+        ctx.restore();
+    }
+
+    function spinWheel(callback) {
+        if (spinning) return;
+        spinning = true;
+        const spins = 6 + Math.random() * 4;
+        const extraAngle = Math.random() * Math.PI * 2;
+        const startRotation = currentRotation;
+        const finalRotation = startRotation + spins * Math.PI * 2 + extraAngle;
+        const duration = 5000, startTime = performance.now();
+        function animate(time) {
+            const elapsed = time - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            currentRotation = startRotation + (finalRotation - startRotation) * ease;
+            drawWheel(currentRotation);
+            if (progress < 1) requestAnimationFrame(animate);
+            else { spinning = false; callback(calculateWinner()); }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    function calculateWinner() {
+        const anglePerWord = (Math.PI * 2) / wheelWords.length;
+        const pointerAngle = Math.PI * 1.5;
+        let normalized = (pointerAngle - currentRotation) % (Math.PI * 2);
+        if (normalized < 0) normalized += Math.PI * 2;
+        return wheelWords[Math.floor(normalized / anglePerWord)];
+    }
+
+    // ===== APP =====
+    let selectedGrade = "", selectedCategory = "";
+    const screens = {
+        welcome: document.getElementById("welcome-screen"),
+        grades: document.getElementById("grade-screen"),
+        categories: document.getElementById("category-screen"),
+        wheel: document.getElementById("wheel-screen"),
+        result: document.getElementById("result-screen")
+    };
+
+    function showScreen(screen) {
+        document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+        screen.classList.add("active");
+    }
+
+    document.getElementById("startBtn").addEventListener("click", () => showScreen(screens.grades));
+    document.querySelectorAll(".grade-btn").forEach(btn => {
+        btn.addEventListener("click", () => { selectedGrade = btn.dataset.grade; loadCategories(); showScreen(screens.categories); });
+    });
+    document.getElementById("backToGrades").addEventListener("click", () => showScreen(screens.grades));
+    document.getElementById("backToWelcome").addEventListener("click", () => showScreen(screens.welcome));
+    document.getElementById("backToCategories").addEventListener("click", () => showScreen(screens.categories));
+
+    const categoryIcons = { easy: "⭐", medium: "🔥", hard: "💎", difficult: "💎", challenge: "🏆" };
+    const categoryDifficulty = { easy: "difficulty-easy", medium: "difficulty-medium", hard: "difficulty-hard", difficult: "difficulty-difficult", challenge: "difficulty-challenge" };
+
+    function loadCategories() {
+        const container = document.getElementById("categoriesContainer");
+        container.innerHTML = "";
+        document.getElementById("gradeTitle").textContent = selectedGrade.charAt(0).toUpperCase() + selectedGrade.slice(1) + " Grade";
+        const categories = Object.keys(spellingData[selectedGrade]);
+        categories.forEach((cat, i) => {
+            const btn = document.createElement("button");
+            btn.className = `grade-card ${categoryDifficulty[cat]} text-xl font-semibold stagger-in`;
+            btn.style.animationDelay = `${i * 0.1}s`;
+            btn.innerHTML = cat.toUpperCase();
+            btn.onclick = () => { selectedCategory = cat; openWheel(); };
+            container.appendChild(btn);
+        });
+    }
+
+    function openWheel() {
+        let key = `${selectedGrade}_${selectedCategory}`;
+        let used = JSON.parse(localStorage.getItem(key)) || [];
+        const allWords = spellingData[selectedGrade][selectedCategory];
+        let available = allWords.filter(w => !used.includes(w));
+        if (available.length === 0) { localStorage.removeItem(key); available = [...allWords]; }
+        loadWheel(available);
+        updateRemaining();
+        document.getElementById("currentCategory").textContent = selectedCategory.toUpperCase();
+        showScreen(screens.wheel);
+    }
+
+    document.getElementById("spinBtn").addEventListener("click", () => { spinWheel(processWinner); });
+
+    function processWinner(word) {
+        let key = `${selectedGrade}_${selectedCategory}`;
+        let used = JSON.parse(localStorage.getItem(key)) || [];
+        if (!used.includes(word)) used.push(word);
+        localStorage.setItem(key, JSON.stringify(used));
+        document.getElementById("winnerWord").textContent = word.toUpperCase();
+        updateRemaining();
+        showScreen(screens.result);
+    }
+
+    document.getElementById("nextWordBtn").addEventListener("click", () => openWheel());
+
+    function updateRemaining() {
+        let key = `${selectedGrade}_${selectedCategory}`;
+        let used = JSON.parse(localStorage.getItem(key)) || [];
+        const total = spellingData[selectedGrade][selectedCategory].length;
+        document.getElementById("remainingWords").textContent = `Remaining: ${Math.max(0, total - used.length)}`;
+    }
+
+    // ===== ELEMENT SDK =====
+    const defaultConfig = {
+        main_title: "Spelling Bee",
+        font_family: "Patrick Hand",
+        font_size: 16
+    };
+
+    window.elementSdk.init({
+        defaultConfig,
+        onConfigChange: async (config) => {
+            const title = config.main_title || defaultConfig.main_title;
+            document.getElementById("mainTitle").textContent = title;
+            const font = config.font_family || defaultConfig.font_family;
+            const baseSize = config.font_size || defaultConfig.font_size;
+            document.getElementById("mainTitle").style.fontFamily = `${font}, cursive`;
+            document.getElementById("mainTitle").style.fontSize = `${baseSize * 4}px`;
+            document.getElementById("winnerWord").style.fontFamily = `${font}, cursive`;
+            document.getElementById("winnerWord").style.fontSize = `${baseSize * 3.5}px`;
+        },
+        mapToCapabilities: (config) => ({
+            recolorables: [],
+            borderables: [],
+            fontEditable: { get: () => config.font_family || defaultConfig.font_family, set: (v) => { config.font_family = v; window.elementSdk.setConfig({ font_family: v }); } },
+            fontSizeable: { get: () => config.font_size || defaultConfig.font_size, set: (v) => { config.font_size = v; window.elementSdk.setConfig({ font_size: v }); } }
+        }),
+        mapToEditPanelValues: (config) => new Map([
+            ["main_title", config.main_title || defaultConfig.main_title]
+        ])
+    });
+
+    lucide.createIcons();
+    </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a06d14a3ef7e6bad',t:'MTc4MDY0MDUyMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
